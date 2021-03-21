@@ -1,0 +1,84 @@
+#! /usr/bin/python3
+# coding: utf-8
+
+# Asynchronous Music Player Daemon client library for Python
+
+# Copyright (C) 2015 Itaï BEN YAACOV
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+import gi
+import signal
+import ampd
+import asyncio
+import gasyncio
+import sys
+
+gi.require_version('Gtk', '3.0')
+
+from gi.repository import GLib  # noqa: E402
+from gi.repository import Gtk  # noqa: E402
+
+
+class App(Gtk.Application):
+    def __init__(self):
+        super(App, self).__init__()
+        self.connect('startup', self.startup_cb)
+        self.connect('shutdown', self.shutdown_cb)
+        self.connect('activate', lambda *args: None)
+
+    @staticmethod
+    def startup_cb(self):
+        self.client = ampd.Client()
+        self.ampd = self.client.executor
+        asyncio.ensure_future(self.client.connect_to_server())
+
+        self.win = Gtk.ApplicationWindow(application=self)
+        self.box = Gtk.VBox()
+        self.win.add(self.box)
+
+        self.label = Gtk.Label(max_width_chars=50, wrap=True)
+        self.box.pack_start(self.label, True, True, 0)
+
+        self.entry = Gtk.Entry()
+        self.entry.connect('activate', self.entry_activate_cb)
+        self.box.pack_end(self.entry, False, False, 0)
+
+        self.sigint_source = GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, lambda: self.win.destroy() or True)
+
+        self.win.show_all()
+
+    @staticmethod
+    def shutdown_cb(self):
+        GLib.source_remove(self.sigint_source)
+        # asyncio.get_event_loop().run_without_glib_until_complete(self.client.close())
+        asyncio.ensure_future(self.client.close())
+
+    @ampd.task
+    async def entry_activate_cb(self, entry):
+        command = eval(entry.get_text(), {name: getattr(self.ampd, name) for name in ampd.request.COMMANDS})
+        try:
+            reply = await command
+        except Exception as e:
+            reply = repr(e)
+        self.label.set_label(str(reply))
+
+
+loop = gasyncio.GAsyncIOEventLoop()
+loop.start_slave_loop()
+App().run(sys.argv)
+loop.stop_slave_loop()
+loop.close()
+del loop
