@@ -270,7 +270,7 @@ class Client(object):
             try:
                 await self.executor.password(self._password)
             except errors.ReplyError:
-                self.disconnect_from_server(self.DISCONNECT_PASSWORD)
+                await self.disconnect_from_server(self.DISCONNECT_PASSWORD)
                 return
         self.executor._connect_cb()
         self._event(request.Event.CONNECT)
@@ -292,13 +292,10 @@ class Client(object):
         self._state = ClientState.STATE_DISCONNECTED
         self.executor._disconnect_cb(_reason, _message)
 
-    async def disconnect_from_server_async(self, _reason=DISCONNECT_REQUESTED, _message=None):
-        self.disconnect_from_server(_reason, _message)
-
     async def _process_reply(self, reply):
         assert '_active_queue' in vars(self)
         if not self._active_queue:
-            self.disconnect_from_server(self.DISCONNECT_ERROR)
+            await self.disconnect_from_server(self.DISCONNECT_ERROR)
             return
 
         request_ = self._active_queue.pop(0)
@@ -308,7 +305,7 @@ class Client(object):
             self._idle_task()
 
     def _protocol_factory(self):
-        return AMPDProtocol(self._process_reply, self.disconnect_from_server_async)
+        return AMPDProtocol(self._process_reply, self.disconnect_from_server)
 
     def _send(self, request_):
         self._active = True
@@ -336,18 +333,6 @@ class Client(object):
         idle = request.Event.IDLE if self._state == ClientState.STATE_IDLE else request.Event(0)
         connected = request.Event.CONNECT if self._state & ClientState.FLAG_CONNECTED else request.Event(0)
         return idle | connected
-
-    @task
-    async def _connect_task(self, welcome):
-        self.protocol_version = await welcome
-        if self._password:
-            try:
-                await self.executor.password(self._password)
-            except errors.ReplyError:
-                self.disconnect_from_server(self.DISCONNECT_PASSWORD)
-                return
-        self.executor._connect_cb()
-        self._event(request.Event.CONNECT)
 
     def _unidle(self, request_):
         if self._state & ClientState.FLAG_CONNECTED:
