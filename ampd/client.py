@@ -441,11 +441,11 @@ class ServerPropertiesBase(object):
         self.ampd = executor.sub_executor()
         self.ampd.set_callbacks(self._connect_cb, self._disconnect_cb)
         self._block = False
-        self._desired_volume = None
         self._reset()
 
     def _reset(self):
-        self.status = {}
+        self._setting_volume = False
+        self.status = {'volume': -1}
         self._status_updated()
         self.current_song = {}
 
@@ -474,26 +474,27 @@ class ServerPropertiesBase(object):
 
     @staticmethod
     def on_set_volume(self, value):
-        self._desired_volume = self.volume
+        self._setting_volume = True
         self._set_volume()
 
     @task
     async def _set_volume(self):
         try:
-            await self.ampd.setvol(self._desired_volume)
+            await self.ampd.setvol(self.volume)
         except errors.ReplyError:
             pass
 
     def _status_updated(self):
         properties = [name for name, *_ in STATUS_PROPERTIES]
-        if self._desired_volume is not None:
+
+        if self._setting_volume or 'volume' not in self.status:
             properties.remove('volume')
-            if 'volume' not in self.status:
-                pass
-            elif int(self.status['volume']) != self._desired_volume:
-                self._set_volume()
+        if self._setting_volume and 'volume' in self.status:
+            if int(self.status['volume']) == self.volume:
+                self._setting_volume = False
             else:
-                self._desired_volume = None
+                self._set_volume()
+
         for name in properties:
             getattr(self.__class__, name)._update(self, self.status)
 
