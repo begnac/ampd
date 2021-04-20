@@ -408,47 +408,6 @@ def StatusProperty(base, *args, **kwargs):
     return type('StatusProperty', (StatusPropertyBase, base), {})(*args, **kwargs)
 
 
-@task
-async def _on_set_volume(instance, value):
-    if instance._setting_volume:
-        instance._setting_volume.cancel()
-    task_ = instance._setting_volume = asyncio.current_task()
-    value = instance.volume
-    _logger.debug("Setting volume to {} at {}".format(value, task_))
-    try:
-        while True:
-            try:
-                await instance.ampd.setvol(value)
-            except errors.ReplyError:
-                await instance.ampd.idle(request.Event.PLAYER)
-                continue
-            status = await instance.ampd.status()
-            if 'volume' not in status:
-                return
-            if int(status['volume']) == value:
-                _logger.debug("Sucessfully set volume to {} at {}".format(value, task_))
-                break
-            await instance.ampd.idle(request.Event.PLAYER | request.Event.MIXER)
-    finally:
-        if instance._setting_volume == task_:
-            instance._setting_volume = None
-
-
-OPTION_NAMES = ['consume', 'random', 'repeat', 'single']
-
-STATUS_PROPERTIES = [
-    ('state', str, ''),
-    ('bitrate', str, ''),
-    ('updating_db', str, ''),
-    ('partition', str, ''),
-    ('elapsed', float, 0.0, 'seekcur'),
-    ('duration', float, 0.0),
-    ('volume', int, -1, _on_set_volume),
-] + [
-    (option, int, 0, option) for option in OPTION_NAMES
-]
-
-
 class PropertyPython(property):
     def __init__(self, type):
         super().__init__(self.fget, self.fset)
@@ -482,7 +441,7 @@ class ServerPropertiesBase(object):
         self.ampd = executor.sub_executor()
         self.ampd.set_callbacks(self._connect_cb, self._disconnect_cb)
         self._block = False
-        self._setting_volume = None
+        self._desired_volume = None
         self._reset()
 
     def _reset(self):
@@ -505,13 +464,53 @@ class ServerPropertiesBase(object):
                     self.current_song = new_current_song
             last_events = await self.ampd.idle(events, timeout=(int(self.elapsed + 1.5) - self.elapsed) if self.state == 'play' else 30)
 
-    def _status_updated(self):
-        for name, *args in STATUS_PROPERTIES:
-            getattr(self.__class__, name)._update(self, self.status)
-
     def _disconnect_cb(self, reason, message):
         _logger.debug("Server properties disconnected.")
         self._reset()
+
+    # Setting volume is a mess.
+    # No point in checking setvol for errors, it may fail silently.
+    # Therefore, we try until we get what we want in _status_updated.
+
+    @staticmethod
+    def on_set_volume(self, value):
+        self._desired_volume = self.volume
+        self._set_volume()
+
+    @task
+    async def _set_volume(self):
+        try:
+            await self.ampd.setvol(self._desired_volume)
+        except errors.ReplyError:
+            pass
+
+    def _status_updated(self):
+        properties = [name for name, *_ in STATUS_PROPERTIES]
+        if self._desired_volume is not None:
+            properties.remove('volume')
+            if 'volume' not in self.status:
+                pass
+            elif int(self.status['volume']) != self._desired_volume:
+                self._set_volume()
+            else:
+                self._desired_volume = None
+        for name in properties:
+            getattr(self.__class__, name)._update(self, self.status)
+
+
+OPTION_NAMES = ['consume', 'random', 'repeat', 'single']
+
+STATUS_PROPERTIES = [
+    ('state', str, ''),
+    ('bitrate', str, ''),
+    ('updating_db', str, ''),
+    ('partition', str, ''),
+    ('elapsed', float, 0.0, 'seekcur'),
+    ('duration', float, 0.0),
+    ('volume', int, -1, ServerPropertiesBase.on_set_volume),
+] + [
+    (option, int, 0, option) for option in OPTION_NAMES
+]
 
 
 properties = {name: StatusProperty(PropertyPython, name, *args) for name, *args in STATUS_PROPERTIES}
