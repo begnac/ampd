@@ -485,17 +485,15 @@ class ServerPropertiesBase(object):
             pass
 
     def _status_updated(self):
-        properties = [name for name, *_ in STATUS_PROPERTIES]
-
-        if self._setting_volume or 'volume' not in self.status:
-            properties.remove('volume')
-        if self._setting_volume and 'volume' in self.status:
-            if int(self.status['volume']) == self.volume:
+        if 'volume' in self.status:
+            if not self._setting_volume:
+                self.__class__.volume._update(self, self.status)
+            elif int(self.status['volume']) == self.volume:
                 self._setting_volume = False
             else:
                 self._set_volume()
 
-        for name in properties:
+        for name in PROPERTY_NAMES_EXCEPT_VOLUME:
             getattr(self.__class__, name)._update(self, self.status)
 
 
@@ -512,6 +510,8 @@ STATUS_PROPERTIES = [
 ] + [
     (option, int, 0, option) for option in OPTION_NAMES
 ]
+
+PROPERTY_NAMES_EXCEPT_VOLUME = [name for name, *args in STATUS_PROPERTIES if name != 'volume']
 
 
 properties = {name: StatusProperty(PropertyPython, name, *args) for name, *args in STATUS_PROPERTIES}
