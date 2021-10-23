@@ -26,7 +26,7 @@ import asyncio
 import gasyncio
 import sys
 
-gi.require_version('Gtk', '3.0')
+gi.require_version('Gtk', '4.0')
 
 from gi.repository import GLib  # noqa: E402
 from gi.repository import Gtk  # noqa: E402
@@ -47,18 +47,18 @@ class App(Gtk.Application):
 
         self.win = Gtk.ApplicationWindow(application=self)
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.win.add(self.box)
+        self.win.set_child(self.box)
 
-        self.label = Gtk.Label(max_width_chars=50, wrap=True)
-        self.box.pack_start(self.label, True, True, 0)
+        self.label = Gtk.Label(max_width_chars=50, wrap=True, vexpand=True)
+        self.box.append(self.label)
 
         self.entry = Gtk.Entry()
         self.entry.connect('activate', self.entry_activate_cb)
-        self.box.pack_end(self.entry, False, False, 0)
+        self.box.append(self.entry)
 
         self.sigint_source = GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, lambda: self.win.destroy() or True)
 
-        self.win.show_all()
+        self.win.present()
 
     @staticmethod
     def shutdown_cb(self):
