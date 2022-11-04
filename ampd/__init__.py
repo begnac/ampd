@@ -2,7 +2,7 @@
 
 # Asynchronous Music Player Daemon client library for Python
 
-# Copyright (C) 2015 Itaï BEN YAACOV
+# Copyright (C) 2015-2022 Itaï BEN YAACOV
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -29,8 +29,8 @@ from .client import OPTION_NAMES, task, Client, ServerProperties
 
 
 __author__ = "Itaï BEN YAACOV"
-__copyright__ = "© 2015 " + __author__
-__version__ = '0.2.12'
+__copyright__ = "© 2015-2022 " + __author__
+__version__ = '0.3.1'
 
 __all__ = [
     '__author__',

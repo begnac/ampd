@@ -2,7 +2,7 @@
 
 # Asynchronous Music Player Daemon client library for Python
 
-# Copyright (C) 2015 Itaï BEN YAACOV
+# Copyright (C) 2015-2022 Itaï BEN YAACOV
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -103,6 +103,7 @@ COMMANDS = {
     'enableoutput': transform_empty,
     'find': transform_single_subset,
     'findadd': transform_empty,
+    'getvol': transform_single_value,
     'kill': lambda: None,
     'list': transform_single_list,
     'listall': transform_lists,

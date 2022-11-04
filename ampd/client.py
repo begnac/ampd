@@ -2,7 +2,7 @@
 
 # Asynchronous Music Player Daemon client library for Python
 
-# Copyright (C) 2015 Itaï BEN YAACOV
+# Copyright (C) 2015-2022 Itaï BEN YAACOV
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -46,8 +46,8 @@ class _Task(asyncio.Task):
     async def wrap(self):
         try:
             await self._future
-        except (asyncio.CancelledError, errors.ConnectionError):
-            pass
+        except (asyncio.CancelledError, errors.ConnectionError) as exc:
+            exc.__traceback__ = None  # Exception ignored, avoid reference loops
         except Exception:
             print("While awaiting AMPD task {}:".format(self._future))
             sys.excepthook(*sys.exc_info())
@@ -303,14 +303,12 @@ class Client(object):
         request_ = self._active_queue.pop(0)
         request_._process_reply(reply)
         if not self._active_queue:
-            self._active = False
             self._idle_task()
 
     def _protocol_factory(self):
         return AMPDProtocol(self._process_reply, self.disconnect_from_server)
 
     def _send(self, request_):
-        self._active = True
         if not self._state & ClientState.FLAG_CONNECTED:
             raise errors.ConnectionError
         if isinstance(request_, request.RequestIdle):
@@ -342,22 +340,23 @@ class Client(object):
 
     @task
     async def _idle_task(self):
-        if not self._state & ClientState.FLAG_CONNECTED or self._active or self._event(request.Event.IDLE, True):
+        if not self._state & ClientState.FLAG_CONNECTED or self._active_queue:
             return
-        _logger.debug("Going idle")
-        request_ = request.RequestIdle(self.executor)
-        request_.add_done_callback(self._unidle)
-        event = request.Event.NONE
-        for subsystem in await request_:
-            event |= request.Event[subsystem.upper()]
-        if event:
-            self._event(event)
+        if not self._event(request.Event.IDLE, True):
+            _logger.debug("Going idle")
+            request_ = request.RequestIdle(self.executor)
+            request_.add_done_callback(self._unidle)
+            event = request.Event.NONE
+            for subsystem in await request_:
+                event |= request.Event[subsystem.upper()]
+            if event:
+                self._event(event)
+        self._idle_task()
 
     def _event(self, event, one=False):
         for request_ in list(self._waiting_list):
             reply = request_._event_mask & event
             if reply:
-                self._active = True
                 request_.set_result(reply)
                 if one:
                     return True
@@ -503,7 +502,9 @@ STATUS_PROPERTIES = [
     ('state', str, ''),
     ('bitrate', str, ''),
     ('updating_db', str, ''),
-    ('partition', str, ''),
+    # ('partition', str, ''),
+    ('nextsong', int, -1),
+    ('nextsongid', int, -1),
     ('elapsed', float, 0.0, 'seekcur'),
     ('duration', float, 0.0),
     ('volume', int, -1, ServerPropertiesBase.on_set_volume),
