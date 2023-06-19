@@ -78,7 +78,8 @@ class AMPDProtocol(asyncio.Protocol):
         super().connection_made(transport)
         self._transport = transport
         self._lines = []
-        self._incomplete_line = b''
+        self._data = b''
+        self._binary = 0
 
     def connection_lost(self, exc):
         _logger.debug("Protocol connection lost")
@@ -88,13 +89,29 @@ class AMPDProtocol(asyncio.Protocol):
         super().connection_lost(exc)
 
     def data_received(self, data):
-        new_lines = (self._incomplete_line + data).split(b'\n')
-        for line in new_lines[:-1]:
-            self._lines.append(line)
-            if line.startswith(b'OK') or line.startswith(b'ACK'):
-                asyncio.ensure_future(self._process_reply(self._lines))
-                self._lines = []
-        self._incomplete_line = new_lines[-1]
+        self._data += data
+        while self._data:
+            if self._binary:
+                if len(self._data) <= self._binary:
+                    break
+                self._lines.append(self._data[:self._binary])
+                if not self._data[self._binary] == 10:
+                    raise RuntimeError
+                self._data = self._data[self._binary + 1:]
+                self._binary = 0
+            else:
+                index = self._data.find(b'\n')
+                if index == -1:
+                    break
+                line = self._data[:index].decode('utf-8')
+                self._data = self._data[index + 1:]
+                self._lines.append(line)
+                if line.startswith('OK') or line.startswith('ACK'):
+                    asyncio.ensure_future(self._process_reply(self._lines))
+                    self._lines = []
+                elif line.startswith('binary: '):
+                    self._binary = int(line[8:])
+                    print('BINARY', self._binary, line)
 
 
 class Executor(object):

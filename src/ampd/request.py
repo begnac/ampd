@@ -231,7 +231,7 @@ class RequestActive(Request):
         parser.send(None)
         for line in lines:
             try:
-                parser.send(line.decode('utf-8'))
+                parser.send(line)
             except StopIteration:
                 return
 
