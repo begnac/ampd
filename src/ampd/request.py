@@ -192,18 +192,16 @@ COMMANDS = {
 
 
 class Request(asyncio.Future):
-    def __init__(self, executor):
+    def __init__(self, executor, log):
         super().__init__()
         self._executor = executor
+        if log:
+            self._executor._log_request(self)
 
     def set_result(self, result):
         _logger.debug("{} --> {}".format(self, result))
         if not self.done():
             super().set_result(result)
-
-    def __await__(self):
-        self._executor._log_request(self)
-        return super().__await__()
 
     @staticmethod
     def _new_request(executor, name):
@@ -221,8 +219,8 @@ class Request(asyncio.Future):
 
 class RequestActive(Request):
     def __init__(self, executor, commandline=None):
-        super().__init__(executor)
         self._commandline = commandline
+        super().__init__(executor, commandline is not None)
         self._parser = self._parse()
         self._parser.send(None)
         self._data = b''
@@ -271,8 +269,6 @@ class RequestWelcome(RequestActive):
             self.set_result(line[len(WELCOME_PREFIX):])
         else:
             raise errors.ProtocolError(line)
-
-    __await__ = asyncio.Future.__await__
 
 
 class RequestCommandLine(RequestActive):
@@ -381,16 +377,12 @@ class RequestPassive(Request):
     """
 
     def __init__(self, executor, event_mask, *, timeout=None):
-        super().__init__(executor)
         self._event_mask = event_mask
-        self._timeout = timeout
-
-    def __await__(self):
-        if self._timeout is not None:
-            self._timeout_handle = asyncio.get_event_loop().call_later(self._timeout, lambda: self.set_result(Event.TIMEOUT))
+        super().__init__(executor, True)
+        if timeout is not None:
+            self._timeout_handle = asyncio.get_event_loop().call_later(timeout, lambda: self.set_result(Event.TIMEOUT))
             self._event_mask |= Event.TIMEOUT
             self.add_done_callback(self._cancel_timeout)
-        return super().__await__()
 
     @staticmethod
     def _cancel_timeout(self):
