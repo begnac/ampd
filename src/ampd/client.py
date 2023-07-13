@@ -294,7 +294,7 @@ class Client(object):
                 return
             self._active_queue.pop(0)
             if not self._active_queue:
-                self._idle_task()
+                self._idle()
                 return
 
     def _protocol_factory(self):
@@ -326,24 +326,20 @@ class Client(object):
         connected = request.Event.CONNECT if self._state & ClientState.FLAG_CONNECTED else request.Event(0)
         return idle | connected
 
-    def _unidle(self, request_):
-        if self._state & ClientState.FLAG_CONNECTED:
-            self._state |= ClientState.FLAG_ACTIVE
+    def _idle(self):
+        while self._event(request.Event.IDLE, True):
+            if self._active_queue:
+                return
+        _logger.debug("Going idle")
+        request.RequestIdle(self.executor, self._unidle)
 
-    @task
-    async def _idle_task(self):
-        if not self._state & ClientState.FLAG_CONNECTED or self._active_queue:
-            return
-        if not self._event(request.Event.IDLE, True):
-            _logger.debug("Going idle")
-            request_ = request.RequestIdle(self.executor)
-            request_.add_done_callback(self._unidle)
-            event = request.Event.NONE
-            for subsystem in await request_:
-                event |= request.Event[subsystem.upper()]
-            if event:
-                self._event(event)
-        self._idle_task()
+    def _unidle(self, subsystems):
+        self._state |= ClientState.FLAG_ACTIVE
+        event = request.Event.NONE
+        for subsystem in subsystems:
+            event |= request.Event[subsystem.upper()]
+        if event:
+            self._event(event)
 
     def _event(self, event, one=False):
         for request_ in list(self._waiting_list):

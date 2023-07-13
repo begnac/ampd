@@ -304,8 +304,15 @@ class RequestCommand(RequestCommandLine):
 
 
 class RequestIdle(RequestCommandLine):
-    def __init__(self, executor):
+    def __init__(self, executor, result_cb):
         super().__init__(executor, 'idle', transform_single_list)
+        self.result_cb = result_cb
+
+    def set_result(self, result):
+        self.result_cb(result)
+
+    def set_exception(self, exception):
+        pass
 
 
 class RequestCommandList(RequestActive):
