@@ -29,8 +29,9 @@ from . import errors
 _logger = logging.getLogger(__name__.split('.')[0])
 
 
-ERROR_RE = '^ACK \\[([0-9]+)@([0-9]+)\\] {([^}]*)} (.*)$'
 SUCCESS = 'OK'
+ERROR_RE = '^ACK \\[([0-9]+)@([0-9]+)\\] {([^}]*)} (.*)$'
+BINARY_RE = '^binary: ([0-9]+)$'
 WELCOME_PREFIX = 'OK MPD '
 LIST_SUCCESS = 'list_OK'
 DELIM = ': '
@@ -222,25 +223,47 @@ class RequestActive(Request):
     def __init__(self, executor, commandline=None):
         super().__init__(executor)
         self._commandline = commandline
+        self._parser = self._parse()
+        self._parser.send(None)
+        self._data = b''
+        self._binary = None
+        self.add_done_callback(self._forget_parser)
 
     def __repr__(self):
         return self._commandline
 
-    def _process_reply(self, lines):
-        parser = self._parser()
-        parser.send(None)
-        for line in lines:
-            try:
-                parser.send(line)
-            except StopIteration:
-                return
+    def read_data(self, data):
+        self._data += data
+        while True:
+            if self._binary is None:
+                try:
+                    line, self._data = self._data.split(b'\n', 1)
+                except ValueError:
+                    break
+                line = line.decode('utf-8')
+                try:
+                    self._binary = self._parser.send(line)
+                except StopIteration:
+                    return self._data
+            else:
+                if len(self._data) <= self._binary + 1:
+                    break
+                if not self._data[self._binary] == 10:
+                    raise RuntimeError
+                self._parser.send(self._data[:self._binary])
+                self._data = self._data[self._binary + 1:]
+                self._binary = None
+
+    @staticmethod
+    def _forget_parser(self):
+        del self._parser
 
 
 class RequestWelcome(RequestActive):
     def __repr__(self):
         return 'WELCOME'
 
-    def _parser(self):
+    def _parse(self):
         line = yield
         if self.cancelled():
             return
@@ -257,10 +280,15 @@ class RequestCommandLine(RequestActive):
         super().__init__(executor, commandline)
         self._transform = transform
 
-    def _parser(self, success=SUCCESS):
+    def _parse(self, success=SUCCESS):
         lines = []
         while True:
             line = yield
+            match = re.match(BINARY_RE, line)
+            if match:
+                binary = yield int(match.group(1))
+                lines.append(('binary', binary))
+                continue
             match = re.match(ERROR_RE, line)
             if match:
                 self.set_exception(errors.ReplyError(int(match.group(1)), int(match.group(2)), match.group(3), match.group(4), self._commandline))
@@ -294,10 +322,10 @@ class RequestCommandList(RequestActive):
             raise errors.CommandError
         super().__init__(executor, '\n'.join(['command_list_ok_begin'] + [command._commandline for command in self._commands] + ['command_list_end']))
 
-    def _parser(self):
+    def _parse(self):
         results = []
         for command in self._commands:
-            yield from command._parser(LIST_SUCCESS)
+            yield from command._parse(LIST_SUCCESS)
             if command.exception() is not None:
                 self.set_exception(command.exception())
                 return

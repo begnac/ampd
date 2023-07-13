@@ -68,18 +68,15 @@ def task(func, *args, **kwargs):
 
 
 class AMPDProtocol(asyncio.Protocol):
-    def __init__(self, process_reply, disconnect_cb):
+    def __init__(self, data_received, disconnect_cb):
         super().__init__()
-        self._process_reply = process_reply
+        self._data_received = data_received
         self._disconnect_cb = disconnect_cb
 
     def connection_made(self, transport):
         _logger.debug("Protocol connection made")
         super().connection_made(transport)
         self._transport = transport
-        self._lines = []
-        self._data = b''
-        self._binary = 0
 
     def connection_lost(self, exc):
         _logger.debug("Protocol connection lost")
@@ -89,29 +86,7 @@ class AMPDProtocol(asyncio.Protocol):
         super().connection_lost(exc)
 
     def data_received(self, data):
-        self._data += data
-        while self._data:
-            if self._binary:
-                if len(self._data) <= self._binary:
-                    break
-                self._lines.append(self._data[:self._binary])
-                if not self._data[self._binary] == 10:
-                    raise RuntimeError
-                self._data = self._data[self._binary + 1:]
-                self._binary = 0
-            else:
-                index = self._data.find(b'\n')
-                if index == -1:
-                    break
-                line = self._data[:index].decode('utf-8')
-                self._data = self._data[index + 1:]
-                self._lines.append(line)
-                if line.startswith('OK') or line.startswith('ACK'):
-                    asyncio.ensure_future(self._process_reply(self._lines))
-                    self._lines = []
-                elif line.startswith('binary: '):
-                    self._binary = int(line[8:])
-                    print('BINARY', self._binary, line)
+        self._data_received(data)
 
 
 class Executor(object):
@@ -311,19 +286,19 @@ class Client(object):
         self._state = ClientState.STATE_DISCONNECTED
         self.executor._disconnect_cb(_reason, _message)
 
-    async def _process_reply(self, reply):
-        assert '_active_queue' in vars(self)
-        if not self._active_queue:
-            await self.disconnect_from_server(self.DISCONNECT_ERROR)
-            return
-
-        request_ = self._active_queue.pop(0)
-        request_._process_reply(reply)
-        if not self._active_queue:
-            self._idle_task()
+    def data_received(self, data):
+        while True:
+            request_ = self._active_queue[0]
+            data = request_.read_data(data)
+            if data is None:
+                return
+            self._active_queue.pop(0)
+            if not self._active_queue:
+                self._idle_task()
+                return
 
     def _protocol_factory(self):
-        return AMPDProtocol(self._process_reply, self.disconnect_from_server)
+        return AMPDProtocol(self.data_received, self.disconnect_from_server)
 
     def _send(self, request_):
         if not self._state & ClientState.FLAG_CONNECTED:
