@@ -326,24 +326,19 @@ class Client(object):
         connected = request.Event.CONNECT if self._state & ClientState.FLAG_CONNECTED else request.Event(0)
         return idle | connected
 
-    def _unidle(self, request_):
-        if self._state & ClientState.FLAG_CONNECTED:
-            self._state |= ClientState.FLAG_ACTIVE
-
     @task
     async def _idle_task(self):
-        if not self._state & ClientState.FLAG_CONNECTED or self._active_queue:
-            return
-        if not self._event(request.Event.IDLE, True):
+        while self._state & ClientState.FLAG_CONNECTED and not self._active_queue:
+            if self._event(request.Event.IDLE, True):
+                continue
             _logger.debug("Going idle")
-            request_ = request.RequestIdle(self.executor)
-            request_.add_done_callback(self._unidle)
+            subsystems = await request.RequestIdle(self.executor)
+            self._state |= ClientState.FLAG_ACTIVE
             event = request.Event.NONE
-            for subsystem in await request_:
+            for subsystem in subsystems:
                 event |= request.Event[subsystem.upper()]
             if event:
                 self._event(event)
-        self._idle_task()
 
     def _event(self, event, one=False):
         for request_ in list(self._waiting_list):
@@ -400,7 +395,7 @@ def StatusProperty(base, *args, **kwargs):
 
 
 class PropertyPython(property):
-    def __init__(self, type):
+    def __init__(self, type):  # noqa: A002
         super().__init__(self.fget, self.fset)
 
     def fget(self, instance, owner=None):
