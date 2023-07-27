@@ -68,8 +68,8 @@ class App(Gtk.Application):
 
     @ampd.task
     async def entry_activate_cb(self, entry):
-        command = eval(entry.get_text(), {name: getattr(self.ampd, name) for name in ampd.request.COMMANDS})
         try:
+            command = eval(entry.get_text(), {name: getattr(self.ampd, name) for name in ampd.request.COMMANDS})
             reply = await command
         except Exception as e:
             reply = repr(e)
