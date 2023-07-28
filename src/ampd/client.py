@@ -292,6 +292,9 @@ class Client(object):
             data = request_.read_data(data)
             if data is None:
                 return
+            if isinstance(request_, request.RequestIdle):
+                _logger.debug("Unidle (reply)")
+                self._state |= ClientState.FLAG_ACTIVE
             self._active_queue.pop(0)
             if not self._active_queue:
                 self._idle_task()
@@ -307,7 +310,7 @@ class Client(object):
             self._state &= ~ClientState.FLAG_ACTIVE
         elif not self._state & ClientState.FLAG_ACTIVE:
             self._transport.write(b'noidle\n')
-            _logger.debug("Unidle")
+            _logger.debug("Unidle (noidle)")
             self._state |= ClientState.FLAG_ACTIVE
         self._transport.write(request_._commandline.encode('utf-8') + b'\n')
         _logger.debug("Write : " + request_._commandline)
@@ -326,20 +329,14 @@ class Client(object):
         connected = request.Event.CONNECT if self._state & ClientState.FLAG_CONNECTED else request.Event(0)
         return idle | connected
 
-    def _unidle(self, request_):
-        if self._state & ClientState.FLAG_CONNECTED:
-            self._state |= ClientState.FLAG_ACTIVE
-
     @task
     async def _idle_task(self):
         if not self._state & ClientState.FLAG_CONNECTED or self._active_queue:
             return
         if not self._event(request.Event.IDLE, True):
             _logger.debug("Going idle")
-            request_ = request.RequestIdle(self.executor)
-            request_.add_done_callback(self._unidle)
             event = request.Event.NONE
-            for subsystem in await request_:
+            for subsystem in await request.RequestIdle(self.executor):
                 event |= request.Event[subsystem.upper()]
             if event:
                 self._event(event)

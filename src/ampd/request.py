@@ -202,7 +202,7 @@ class Request(asyncio.Future):
         self._executor = executor
 
     def set_result(self, result):
-        _logger.debug("{} --> {}".format(self, result))
+        _logger.debug(f"{self} ({id(self)}) --> {result}")
         if not self.done():
             super().set_result(result)
 
