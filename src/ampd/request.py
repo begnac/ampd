@@ -199,6 +199,7 @@ COMMANDS = {
 class Request(asyncio.Future):
     def __init__(self, executor):
         super().__init__()
+        self._once = True
         self._executor = executor
 
     def set_result(self, result):
@@ -207,7 +208,9 @@ class Request(asyncio.Future):
             super().set_result(result)
 
     def __await__(self):
-        self._executor._log_request(self)
+        if self._once:
+            self._executor._log_request(self)
+            self._once = False
         return super().__await__()
 
     @staticmethod
@@ -265,8 +268,9 @@ class RequestActive(Request):
 
 
 class RequestWelcome(RequestActive):
-    def __repr__(self):
-        return 'WELCOME'
+    def __init__(self, executor):
+        super().__init__(executor, 'WELCOME')
+        self._once = False
 
     def _parse(self):
         line = yield
@@ -276,8 +280,6 @@ class RequestWelcome(RequestActive):
             self.set_result(line[len(WELCOME_PREFIX):])
         else:
             raise errors.ProtocolError(line)
-
-    __await__ = asyncio.Future.__await__
 
 
 class RequestCommandLine(RequestActive):
@@ -388,14 +390,10 @@ class RequestPassive(Request):
     def __init__(self, executor, event_mask, *, timeout=None):
         super().__init__(executor)
         self._event_mask = event_mask
-        self._timeout = timeout
-
-    def __await__(self):
-        if self._timeout is not None:
-            self._timeout_handle = asyncio.get_event_loop().call_later(self._timeout, lambda: self.set_result(Event.TIMEOUT))
+        if timeout is not None:
+            self._timeout_handle = asyncio.get_event_loop().call_later(timeout, lambda: self.set_result(Event.TIMEOUT))
             self._event_mask |= Event.TIMEOUT
             self.add_done_callback(self._cancel_timeout)
-        return super().__await__()
 
     @staticmethod
     def _cancel_timeout(self):

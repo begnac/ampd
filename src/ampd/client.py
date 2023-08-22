@@ -46,7 +46,7 @@ class _Task(asyncio.Task):
     async def wrap(self):
         try:
             await self._future
-        except (asyncio.CancelledError, errors.ConnectionError) as exc:
+        except errors.ConnectionError as exc:
             exc.__traceback__ = None  # Exception ignored, avoid reference loops
         except Exception:
             print("While awaiting AMPD task {}:".format(self._future))
@@ -114,7 +114,8 @@ class Executor(object):
             self._children[0].close()
         if self._requests:
             for request_ in self._requests:
-                request_.cancel()
+                if not request_.done():
+                    request_.set_exception(errors.ConnectionError)
         if self._parent:
             self._parent._children.remove(self)
             self._parent = None
@@ -272,14 +273,19 @@ class Client(object):
             return
 
         if self._state == ClientState.STATE_CONNECTING:
-            self._connecting.cancel()
+            self._connecting.set_exception(errors.ConnectionError)
         else:
             self._protocol._disconnect_cb = None
             self._transport.close()
             self._transport._read_ready_cb = None  # Should be done in selector_events.py
             self.protocol_version = None
             for request_ in self._active_queue + self._waiting_list:
-                request_.set_exception(errors.ConnectionError)
+                if not request_.done():
+                    request_.set_exception(errors.ConnectionError)
+                try:
+                    await request_
+                except errors.ConnectionError:
+                    pass
             del self._active_queue, self._transport, self._protocol
             _logger.debug("Disconnected, deleted")
 
