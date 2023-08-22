@@ -273,7 +273,7 @@ class Client(object):
             return
 
         if self._state == ClientState.STATE_CONNECTING:
-            self._connecting.set_exception(errors.ConnectionError)
+            self._connecting.cancel()
         else:
             self._protocol._disconnect_cb = None
             self._transport.close()
