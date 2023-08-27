@@ -49,13 +49,15 @@ class ClientGLib(client.Client, GObject.Object):
         self.emit('client-disconnected', reason, message)
 
 
-class ServerPropertiesGLibBase(client.ServerPropertiesBase, GObject.Object):
+class ServerPropertiesGLib(client.ServerPropertiesBase, GObject.Object):
     """
     Adds GLib property and signal functionality to ServerProperties.
 
     GLib signals:
       server-error(message)
     """
+
+    locals().update({name: client.StatusProperty(GObject.Property, name, *args) for name, *args in client.STATUS_PROPERTIES})
 
     current_song = GObject.Property()
     status = GObject.Property()
@@ -66,14 +68,10 @@ class ServerPropertiesGLibBase(client.ServerPropertiesBase, GObject.Object):
 
     def __init__(self, client):
         GObject.Object.__init__(self)
-        super(ServerPropertiesGLibBase, self).__init__(client)
+        super().__init__(client)
 
     def _status_updated(self):
         super()._status_updated()
         if 'error' in self.status:
             self.emit('server-error', self.status['error'])
             client.task(self.ampd.clearerror)()
-
-
-properties = {name: client.StatusProperty(GObject.Property, name, *args) for name, *args in client.STATUS_PROPERTIES}
-ServerPropertiesGLib = type('ServerPropertiesGLib', (ServerPropertiesGLibBase,), dict(properties, __doc__=ServerPropertiesGLibBase.__doc__))

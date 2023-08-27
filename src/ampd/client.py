@@ -414,23 +414,6 @@ class PropertyPython(property):
 
 
 class ServerPropertiesBase(object):
-    """
-    Keeps track of various properties of the server:
-    - status
-    - current_song
-    - state
-    - volume
-    - duration
-    - elapsed
-    - bitrate
-    - consume, random, repeat, single
-    - partition
-
-    Assignment to volume, elapsed, consume, random, repeat, single is reflected in the server.
-
-    Do not use this -- use ServerPropertiesGLib instead.
-    """
-
     def __init__(self, executor):
         self.ampd = executor.sub_executor()
         self.ampd.set_callbacks(self._connect_cb, self._disconnect_cb)
@@ -510,5 +493,22 @@ STATUS_PROPERTIES = [
 PROPERTY_NAMES_EXCEPT_VOLUME = [name for name, *args in STATUS_PROPERTIES if name != 'volume']
 
 
-properties = {name: StatusProperty(PropertyPython, name, *args) for name, *args in STATUS_PROPERTIES}
-ServerProperties = type('ServerProperties', (ServerPropertiesBase,), dict(properties, __doc__=ServerPropertiesBase.__doc__))
+class ServerProperties(ServerPropertiesBase):
+    """
+    Keeps track of various properties of the server:
+    - status
+    - current_song
+    - state
+    - volume
+    - duration
+    - elapsed
+    - bitrate
+    - consume, random, repeat, single
+    - partition
+
+    Assignment to volume, elapsed, consume, random, repeat, single is reflected in the server.
+
+    Do not use this -- use ServerPropertiesGLib instead.
+    """
+
+    locals().update({name: StatusProperty(PropertyPython, name, *args) for name, *args in STATUS_PROPERTIES})
