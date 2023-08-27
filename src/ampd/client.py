@@ -25,13 +25,22 @@ import urllib.parse
 import sys
 import decorator
 import traceback
-import enum
 
 from . import request
 from . import errors
 
 
 _logger = logging.getLogger(__name__.split('.')[0])
+
+
+class ClientState:
+    FLAG_CONNECTED = 1
+    FLAG_ACTIVE = 2
+
+    STATE_DISCONNECTED = 0
+    STATE_CONNECTING = FLAG_ACTIVE
+    STATE_IDLE = FLAG_CONNECTED
+    STATE_ACTIVE = FLAG_CONNECTED | FLAG_ACTIVE
 
 
 class _Task(asyncio.Task):
@@ -167,16 +176,6 @@ class Executor(object):
 
     def _unlog_request(self, request_):
         self._requests.remove(request_)
-
-
-class ClientState(enum.IntFlag):
-    FLAG_CONNECTED = 1
-    FLAG_ACTIVE = 2
-
-    STATE_DISCONNECTED = 0
-    STATE_CONNECTING = FLAG_ACTIVE
-    STATE_IDLE = FLAG_CONNECTED
-    STATE_ACTIVE = FLAG_CONNECTED | FLAG_ACTIVE
 
 
 class Client(object):
