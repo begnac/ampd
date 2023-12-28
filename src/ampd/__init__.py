@@ -29,8 +29,10 @@ from .client import OPTION_NAMES, task, Client, ServerProperties
 
 
 __author__ = "Itaï BEN YAACOV"
-__copyright__ = "© 2015-2022 " + __author__
-__version__ = '0.3.1'
+__author_email__ = "candeb@free.fr"
+__copyright__ = f"Copyright (C) 2015-2023 {__author__} <{__author_email__}>"
+__website__ = 'https://github.com/begnac/ampd'
+__version__ = '0.3.2'
 
 __all__ = [
     '__author__',
