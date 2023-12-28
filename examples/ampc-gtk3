@@ -43,7 +43,7 @@ class App(Gtk.Application):
     def startup_cb(self):
         self.client = ampd.Client()
         self.ampd = self.client.executor
-        asyncio.ensure_future(self.client.connect_to_server())
+        asyncio.create_task(self.client.connect_to_server())
 
         self.win = Gtk.ApplicationWindow(application=self)
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -63,8 +63,7 @@ class App(Gtk.Application):
     @staticmethod
     def shutdown_cb(self):
         GLib.source_remove(self.sigint_source)
-        # asyncio.get_event_loop().run_without_glib_until_complete(self.client.close())
-        asyncio.ensure_future(self.client.close())
+        asyncio.create_task(self.client.close())
 
     @ampd.task
     async def entry_activate_cb(self, entry):
