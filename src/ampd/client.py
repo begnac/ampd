@@ -47,10 +47,15 @@ class _Task(asyncio.Task):
     """
     Wrapper for AMPD tasks.
     """
+
+    tasks = set()
+
     def __init__(self, future, *, loop=None):
         self._caller_filename, self._caller_line, self._caller_function, self._caller_text = traceback.extract_stack()[-4]
         self._future = future
         super().__init__(self.wrap(), loop=loop)
+        self.tasks.add(self)
+        self.add_done_callback(self.tasks.remove)
 
     async def wrap(self):
         try:
@@ -71,7 +76,7 @@ def task(func, *args, **kwargs):
     """
     Decorator for AMPD task functions.
 
-    Wraps in a Task which will accept cancellation as normal termination.
+    Wraps in a Task which will accept ConnectionError as normal termination.
     """
     return _Task(func(*args, **kwargs))
 
@@ -91,7 +96,7 @@ class AMPDProtocol(asyncio.Protocol):
         _logger.debug("Protocol connection lost")
         del self._transport
         if self._disconnect_cb is not None:
-            asyncio.ensure_future(self._disconnect_cb(Client.DISCONNECT_ERROR))
+            asyncio.create_task(self._disconnect_cb(Client.DISCONNECT_ERROR))
         super().connection_lost(exc)
 
     def data_received(self, data):
@@ -265,7 +270,6 @@ class Client(object):
                 await self.disconnect_from_server(self.DISCONNECT_PASSWORD)
                 return
         self.executor._connect_cb()
-        self._event(request.Event.CONNECT)
 
     async def disconnect_from_server(self, _reason=DISCONNECT_REQUESTED, _message=None):
         if self._state == ClientState.STATE_DISCONNECTED:
@@ -331,8 +335,7 @@ class Client(object):
 
     def _current_events(self):
         idle = request.Event.IDLE if self._state == ClientState.STATE_IDLE else request.Event(0)
-        connected = request.Event.CONNECT if self._state & ClientState.FLAG_CONNECTED else request.Event(0)
-        return idle | connected
+        return idle
 
     @task
     async def _idle_task(self):
@@ -510,4 +513,5 @@ class ServerProperties(ServerPropertiesBase):
     Do not use this -- use ServerPropertiesGLib instead.
     """
 
-    locals().update({name: StatusProperty(PropertyPython, name, *args) for name, *args in STATUS_PROPERTIES})
+    for name, *args in STATUS_PROPERTIES:
+        locals()[name] = StatusProperty(PropertyPython, name, *args)

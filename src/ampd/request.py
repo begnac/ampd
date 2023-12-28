@@ -356,11 +356,10 @@ EVENTS = {name: 1 << i for i, name in enumerate(['DATABASE',
                                                  'STICKER',
                                                  'SUBSCRIPTION',
                                                  'MESSAGE',
-                                                 'CONNECT',
                                                  'IDLE',
                                                  'TIMEOUT'])}
 EVENTS['NONE'] = 0
-EVENTS['ANY'] = EVENTS['CONNECT'] - 1
+EVENTS['ANY'] = EVENTS['MESSAGE'] - 1
 Event = enum.IntFlag('Event', EVENTS)
 del EVENTS
 
@@ -369,7 +368,6 @@ An enumeration of possible events for the idle request.
 Possible values are:
 - An MPD SUBSYSTEM name (in uppercase).
 - ANY - match any subsystem.
-- CONNECT - client is connected to server.
 - IDLE - client is idle.
 - TIMEOUT - flagged in the return value if a timeout ocurred.
 """

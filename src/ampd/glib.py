@@ -57,7 +57,8 @@ class ServerPropertiesGLib(client.ServerPropertiesBase, GObject.Object):
       server-error(message)
     """
 
-    locals().update({name: client.StatusProperty(GObject.Property, name, *args) for name, *args in client.STATUS_PROPERTIES})
+    for name, *args in client.STATUS_PROPERTIES:
+        locals()[name] = client.StatusProperty(GObject.Property, name, *args)
 
     current_song = GObject.Property()
     status = GObject.Property()
