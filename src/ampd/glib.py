@@ -49,6 +49,11 @@ class ClientGLib(client.Client, GObject.Object):
         self.emit('client-disconnected', reason, message)
 
 
+class Property(GObject.Property):
+    def __init__(self, **kwargs):
+        super().__init__(default=self._default, **kwargs)
+
+
 class ServerPropertiesGLib(client.ServerPropertiesBase, GObject.Object):
     """
     Adds GLib property and signal functionality to ServerProperties.
@@ -58,7 +63,7 @@ class ServerPropertiesGLib(client.ServerPropertiesBase, GObject.Object):
     """
 
     for name, *args in client.STATUS_PROPERTIES:
-        locals()[name] = client.StatusProperty(GObject.Property, name, *args)
+        locals()[name] = client.StatusProperty(Property, name, *args)
 
     current_song = GObject.Property()
     status = GObject.Property()

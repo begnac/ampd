@@ -48,14 +48,14 @@ class _Task(asyncio.Task):
     Wrapper for AMPD tasks.
     """
 
-    tasks = set()
+    # tasks = set()
 
     def __init__(self, future, *, loop=None):
         self._caller_filename, self._caller_line, self._caller_function, self._caller_text = traceback.extract_stack()[-4]
         self._future = future
         super().__init__(self.wrap(), loop=loop)
-        self.tasks.add(self)
-        self.add_done_callback(self.tasks.remove)
+        # self.tasks.add(self)
+        # self.add_done_callback(self.tasks.remove)
 
     async def wrap(self):
         try:
@@ -360,12 +360,12 @@ class Client(object):
         return False
 
 
-class StatusPropertyBase(object):
+class StatusPropertyBase:
     def __init__(self, name, type_, default, on_set=None):
-        super().__init__(type=type_)
         self._name = name
         self._type = type_
         self._default = default
+        super().__init__(type=type_)
         if isinstance(on_set, str):
             self._on_set = self._on_set_ampd
             self._ampd_command = on_set
@@ -376,6 +376,8 @@ class StatusPropertyBase(object):
         self.fset = self._fset
 
     def _fset(self, instance, value):
+        if self._type is bool:
+            value = int(value)
         self._orig_fset(instance, value)
         if self._on_set is not None and not instance._block:
             self._on_set(instance, value)
@@ -384,7 +386,9 @@ class StatusPropertyBase(object):
         if self._name not in status:
             return self._default
         value = status[self._name]
-        if self._type is not None:
+        if self._type is bool:
+            value = bool(int(value))
+        elif self._type is not None:
             value = self._type(value)
         return value
 
@@ -489,7 +493,7 @@ STATUS_PROPERTIES = [
     ('duration', float, 0.0),
     ('volume', int, -1, ServerPropertiesBase.on_set_volume),
 ] + [
-    (option, int, 0, option) for option in OPTION_NAMES
+    (option, bool, False, option) for option in OPTION_NAMES
 ]
 
 PROPERTY_NAMES_EXCEPT_VOLUME = [name for name, *args in STATUS_PROPERTIES if name != 'volume']
