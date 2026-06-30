@@ -29,10 +29,11 @@ import sys
 gi.require_version('Gtk', '3.0')
 
 from gi.repository import GLib  # noqa: E402
+from gi.repository import GLibUnix  # noqa: E402
 from gi.repository import Gtk  # noqa: E402
 
 
-class App(Gtk.Application):
+class App(gasyncio.GAsyncIOApplicationMixin, Gtk.Application):
     def __init__(self):
         super(App, self).__init__()
         self.connect('startup', self.startup_cb)
@@ -56,7 +57,7 @@ class App(Gtk.Application):
         self.entry.connect('activate', self.entry_activate_cb)
         self.box.pack_end(self.entry, False, False, 0)
 
-        self.sigint_source = GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, lambda: self.win.destroy() or True)
+        self.sigint_source = GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, lambda: self.win.destroy() or True)
 
         self.win.show_all()
 
@@ -75,9 +76,4 @@ class App(Gtk.Application):
         self.label.set_label(str(reply))
 
 
-loop = gasyncio.GAsyncIOEventLoop()
-loop.start_slave_loop()
 App().run(sys.argv)
-loop.stop_slave_loop()
-loop.close()
-del loop

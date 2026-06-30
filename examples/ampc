@@ -32,11 +32,10 @@ import os
 logging.getLogger().setLevel(logging.DEBUG)
 
 
-class AMPC(object):
+class AMPC:
     PROMPT = 'ampd: '
 
     def __init__(self):
-        self.loop = asyncio.get_event_loop()
         self.client = ampd.Client()
         self.ampd = self.client.executor
 
@@ -44,10 +43,8 @@ class AMPC(object):
             print("^C")
             raise KeyboardInterrupt
         signal.signal(signal.SIGINT, interrupt)
-        self.loop.run_until_complete(self.prompt())
-        self.loop.close()
+        asyncio.run(self.prompt())
 
-    @ampd.task
     async def prompt(self):
         await self.client.connect_to_server()
         while True:
